@@ -1,11 +1,31 @@
 # Local Dev Toolbox
 
-Small developer utilities in a Chrome extension popup. Everything runs locally:
-no account, no network requests, no host permissions.
+Small developer utilities in a browser extension popup: **JWT, Base64/URL,
+timestamps, JSON and regex**. Everything runs locally — no account, no network
+requests, no host permissions.
+
+Built for the moment you need to paste a production token or a customer payload
+somewhere and don't want it to end up on a random website.
+
+- [Tools](#tools)
+- [Download](#download)
+- [Install](#install) — [Chrome](#google-chrome) · [Edge](#microsoft-edge) · [Brave](#brave) · [Opera](#opera--opera-gx) · [Vivaldi](#vivaldi) · [Arc](#arc) · [Firefox](#firefox) · [Safari](#safari)
+- [Usage](#usage)
+- [Updating and uninstalling](#updating-and-uninstalling)
+- [Privacy](#privacy)
+- [Troubleshooting](#troubleshooting)
+- [Development](#development)
+- [License](#license)
 
 ## Tools
 
-All five are implemented.
+| Tab    | What it does                                                                 |
+| ------ | ---------------------------------------------------------------------------- |
+| JWT    | Decode header and payload, check expiry, verify HMAC / RSA / PSS / ECDSA signatures |
+| Base64 | Base64 encode/decode, URL percent-encoding, query string ⇄ JSON              |
+| Time   | Unix timestamp ⇄ date in any common zone, seconds through nanoseconds         |
+| JSON   | Pretty-print, minify, validate with line/column, diff two documents          |
+| Regex  | Live match highlighting and capture groups, safe against runaway patterns    |
 
 ### JWT
 
@@ -60,8 +80,7 @@ line and column. Both documents are validated live as you type.
 
 "Diff A ↔ B" compares two documents and lists every difference by path
 (`$.env.LOG_LEVEL`, `$.ports[2]`) marked added, removed or changed. Array
-elements are compared by index. The diff is written in `json.js` rather than
-pulled in as a dependency.
+elements are compared by index.
 
 ### Regex
 
@@ -75,6 +94,130 @@ at 200,000 characters and the first 500 matches are listed.
 Uses the JavaScript (ECMAScript) engine; the UI notes that Java and Python
 regexes can behave differently.
 
+## Download
+
+The extension isn't in any browser store yet, so you install it from source.
+There is no build step — the folder you download is the extension.
+
+**With git:**
+
+```bash
+git clone https://github.com/wjNoah/localToolBox.git
+```
+
+**Without git:** open <https://github.com/wjNoah/localToolBox>, click
+**Code → Download ZIP**, and unzip it.
+
+Put the folder somewhere permanent (not `Downloads` or a temp directory). The
+browser loads the extension straight from that folder, so if you move or delete
+it, the extension stops working.
+
+The folder you select during install is the one that contains `manifest.json`.
+
+## Install
+
+| Browser                                | Support                          |
+| -------------------------------------- | -------------------------------- |
+| Chrome, Edge, Brave, Opera, Vivaldi, Arc | Supported (Chromium, Manifest V3) |
+| Firefox                                | Temporary add-on, untested       |
+| Safari                                 | Needs Xcode conversion, untested |
+
+### Google Chrome
+
+1. Open `chrome://extensions`
+2. Turn on **Developer mode** (top right)
+3. Click **Load unpacked** and select the project folder
+4. Click the puzzle-piece icon in the toolbar and pin **Local Dev Toolbox**
+
+### Microsoft Edge
+
+1. Open `edge://extensions`
+2. Turn on **Developer mode** (left sidebar, or bottom left)
+3. Click **Load unpacked** and select the project folder
+4. Click the puzzle-piece icon and toggle **Show in toolbar**
+
+### Brave
+
+1. Open `brave://extensions`
+2. Turn on **Developer mode** (top right)
+3. Click **Load unpacked** and select the project folder
+4. Pin it from the puzzle-piece menu
+
+### Opera / Opera GX
+
+1. Open `opera://extensions`
+2. Turn on **Developer mode** (top right)
+3. Click **Load unpacked** and select the project folder
+4. Pin it from the cube icon in the toolbar
+
+### Vivaldi
+
+1. Open `vivaldi://extensions`
+2. Turn on **Developer mode** (top right)
+3. Click **Load unpacked** and select the project folder
+
+### Arc
+
+1. Open `arc://extensions`
+2. Turn on **Developer mode** (top right)
+3. Click **Load unpacked** and select the project folder
+4. Pin it from the extensions icon in the sidebar
+
+### Firefox
+
+Firefox only loads unsigned extensions as **temporary add-ons**, which are
+removed when Firefox restarts. Firefox 115 or newer is needed (Manifest V3,
+module Workers). This setup hasn't been tested yet — reports welcome.
+
+1. Open `about:debugging#/runtime/this-firefox`
+2. Click **Load Temporary Add-on…**
+3. Select the `manifest.json` file inside the project folder
+4. Pin it from the puzzle-piece menu in the toolbar
+
+A temporary add-on gets a new internal ID on every load, so "Remember input"
+data does not survive a restart.
+
+### Safari
+
+Safari needs every web extension wrapped in a macOS app. You need a Mac with
+Xcode installed. This hasn't been tested yet.
+
+```bash
+xcrun safari-web-extension-converter /path/to/localToolBox
+```
+
+1. Xcode opens the generated project — press **Run** (⌘R)
+2. In Safari, open **Settings → Advanced** and turn on **Show features for web developers**
+3. In **Settings → Developer**, turn on **Allow unsigned extensions** (resets every time Safari quits)
+4. In **Settings → Extensions**, enable **Local Dev Toolbox**
+
+## Usage
+
+- **Open the popup:** click the toolbar icon, or press **Cmd+Shift+Y** (macOS) /
+  **Ctrl+Shift+Y** (Windows/Linux). If the shortcut does nothing, another
+  extension probably took it — see [Troubleshooting](#troubleshooting).
+- **Switch tools:** click a tab, or focus the tab bar and use **← / →**,
+  **Home** and **End**.
+- **Copy a result:** use the copy button next to it.
+- **Remember input** (footer, off by default): keeps what you typed so it's
+  still there next time you open the popup. **Clear saved input** wipes it.
+
+## Updating and uninstalling
+
+**Update:**
+
+```bash
+git pull
+```
+
+Then reload the extension: the ↻ icon on its card in `chrome://extensions`
+(or the browser's equivalent page). Firefox: **Reload** in `about:debugging`.
+Safari: run the Xcode project again. If you downloaded a ZIP, download it
+again and replace the folder contents.
+
+**Uninstall:** click **Remove** on the extension's card, then delete the
+folder. Anything saved via "Remember input" is removed with the extension.
+
 ## Privacy
 
 This is the point of the extension — people paste real tokens into these tools.
@@ -86,15 +229,41 @@ This is the point of the extension — people paste real tokens into these tools
   off until you turn it on; switching it off deletes anything already stored, and
   "Clear saved input" wipes it at any time. Stored input lives in
   `chrome.storage.local` on this machine only — `chrome.storage.sync` is not used.
+- JWT signing secrets and public keys are never stored, even with
+  "Remember input" on.
 
-## Run it locally
+You can check this yourself: `manifest.json` is 23 lines, and
+`grep -rn "fetch\|XMLHttpRequest\|WebSocket" popup` comes back empty.
 
-1. Open `chrome://extensions`
-2. Enable "Developer mode"
-3. Click "Load unpacked" and select this folder
-4. Open the popup via the toolbar icon or Cmd+Shift+Y (Ctrl+Shift+Y on Windows/Linux)
+## Troubleshooting
 
-## Structure
+**"Manifest file is missing or unreadable"** — you selected the wrong folder.
+Pick the one that directly contains `manifest.json`, not its parent (ZIP
+downloads often unpack to `localToolBox-main/localToolBox-main/`).
+
+**The keyboard shortcut doesn't open the popup** — another extension or the
+OS already uses it. Set your own at `chrome://extensions/shortcuts`
+(`edge://extensions/shortcuts`, `brave://extensions/shortcuts`, …) or, in
+Firefox, `about:addons` → gear icon → **Manage Extension Shortcuts**.
+
+**The extension disappeared after a restart** — expected in Firefox (temporary
+add-on) and in Safari with unsigned extensions. In Chromium browsers, check
+that the folder wasn't moved or deleted.
+
+**"Disable developer mode extensions" popup on startup** (Chrome/Edge) — normal
+for unpacked extensions. Click the X; don't click Disable.
+
+**Regex says it timed out** — the pattern backtracks catastrophically on this
+input (e.g. `(a+)+$`). Make the quantifiers more specific or shorten the input.
+
+**Something looks wrong** — right-click inside the popup → **Inspect** opens
+DevTools for the popup; errors show in its Console.
+
+## Development
+
+No build step, no framework, no runtime dependencies — plain ES modules.
+Edit a file, then close and reopen the popup. Changes to `manifest.json`
+need the ↻ reload on the extensions page.
 
 ```
 manifest.json          Manifest V3, only the "storage" permission
@@ -113,14 +282,22 @@ Each tool keeps its logic in pure exported functions (`decodeJwt`,
 `parseTimestamp`, `diffValues`, `findMatches`, …) separate from the DOM, so they
 can be unit tested without a browser.
 
-## Principles
+### Principles
 
 - No network: the CSP sets `connect-src 'none'`
-- Minimal permissions
-- No build step, no framework, no runtime dependencies — plain ES modules
+- Minimal permissions — `storage` only
+- No dependencies, no build step
 - User input reaches the DOM only through `textContent`; `innerHTML` is never
   assigned anywhere in the codebase
 
+### Packaging a ZIP
+
+For sharing a build or uploading to a store dashboard:
+
+```bash
+zip -r local-dev-toolbox.zip manifest.json popup LICENSE
+```
+
 ## License
 
-MIT
+MIT — see [LICENSE](LICENSE).
