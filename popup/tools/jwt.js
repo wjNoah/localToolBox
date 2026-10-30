@@ -1,6 +1,6 @@
-// JWT decoder. Decode only: the signature is shown but never verified in v1.
+// JWT decoder and signature verifier.
 
-import { bytesFromBase64, textFromBase64 } from "../codec.js";
+import { bytesFromBase64, textFromBase64, utf8FromText } from "../codec.js";
 import { formatDateInZone, formatDuration, isoInZone, isValidInstant } from "../format.js";
 import { copyButton, el, field, outputBlock, persist, setStatus, statusLine } from "../ui.js";
 
@@ -119,6 +119,129 @@ export function tokenValidity(payload, nowMs = Date.now()) {
   return { tone: "muted", text: "No exp claim" };
 }
 
+// --- signature verification --------------------------------------------------
+//
+// Runs entirely through SubtleCrypto: no network call, nothing leaves the
+// popup. A secret or key the person pastes here is held in a plain JS
+// variable and is never written to chrome.storage, even with "Remember
+// input" on — see the comment in init() below.
+
+const HMAC_ALGS = { HS256: "SHA-256", HS384: "SHA-384", HS512: "SHA-512" };
+const RSA_ALGS = { RS256: "SHA-256", RS384: "SHA-384", RS512: "SHA-512" };
+const RSA_PSS_ALGS = { PS256: "SHA-256", PS384: "SHA-384", PS512: "SHA-512" };
+const EC_ALGS = {
+  ES256: { hash: "SHA-256", namedCurve: "P-256" },
+  ES384: { hash: "SHA-384", namedCurve: "P-384" },
+  ES512: { hash: "SHA-512", namedCurve: "P-521" },
+};
+const PSS_SALT_LENGTH = { "SHA-256": 32, "SHA-384": 48, "SHA-512": 64 };
+
+/** @returns {"hmac"|"rsa"|"rsa-pss"|"ec"|"none"|"unsupported"} */
+export function algFamily(alg) {
+  if (!alg || alg === "none") return "none";
+  if (alg in HMAC_ALGS) return "hmac";
+  if (alg in RSA_ALGS) return "rsa";
+  if (alg in RSA_PSS_ALGS) return "rsa-pss";
+  if (alg in EC_ALGS) return "ec";
+  return "unsupported";
+}
+
+/** Strip PEM armor and whitespace, then hand the base64 body to the shared decoder. */
+function bytesFromPem(pem) {
+  const body = String(pem)
+    .replace(/-----BEGIN [^-]+-----/g, "")
+    .replace(/-----END [^-]+-----/g, "")
+    .trim();
+  if (!body) throw new Error("Paste a PEM-encoded public key (starts with -----BEGIN PUBLIC KEY-----).");
+  return bytesFromBase64(body);
+}
+
+/**
+ * Verify a JWT's signature against a secret (HMAC) or public key (RSA/EC).
+ * Never throws on a bad secret/key/signature — that is a normal "invalid"
+ * result. Throws only when the token itself can't be parsed.
+ * @returns {{alg: string, family: string, checked: boolean, valid: boolean, reason: string}}
+ */
+export async function verifyJwtSignature(token, { secret = "", publicKeyPem = "" } = {}) {
+  const parts = String(token ?? "").trim().split(".");
+  if (parts.length !== 3) throw new Error("Not a three-part JWT.");
+  const [headerPart, payloadPart, sigPart] = parts;
+
+  let header;
+  try {
+    header = JSON.parse(textFromBase64(headerPart));
+  } catch {
+    throw new Error("Header segment is not valid JSON.");
+  }
+
+  const alg = typeof header.alg === "string" ? header.alg : "";
+  const family = algFamily(alg);
+
+  if (family === "none") {
+    return { alg: alg || "(missing)", family, checked: true, valid: false, reason: '"none" is unsigned — never trust it.' };
+  }
+  if (family === "unsupported") {
+    return { alg, family, checked: false, valid: false, reason: `${alg} isn't supported for verification here.` };
+  }
+
+  let signatureBytes;
+  try {
+    signatureBytes = bytesFromBase64(sigPart);
+  } catch {
+    throw new Error("Signature segment is not valid base64url.");
+  }
+  const signingInput = utf8FromText(`${headerPart}.${payloadPart}`);
+
+  try {
+    if (family === "hmac") {
+      if (!secret) return { alg, family, checked: false, valid: false, reason: "Paste the signing secret to verify." };
+      const key = await crypto.subtle.importKey(
+        "raw",
+        utf8FromText(secret),
+        { name: "HMAC", hash: HMAC_ALGS[alg] },
+        false,
+        ["verify"],
+      );
+      const valid = await crypto.subtle.verify("HMAC", key, signatureBytes, signingInput);
+      return { alg, family, checked: true, valid, reason: valid ? "Signature matches." : "Signature does not match this secret." };
+    }
+
+    if (!publicKeyPem.trim()) {
+      return { alg, family, checked: false, valid: false, reason: "Paste the public key (SPKI, PEM) to verify." };
+    }
+
+    let keyBytes;
+    try {
+      keyBytes = bytesFromPem(publicKeyPem);
+    } catch (err) {
+      return { alg, family, checked: false, valid: false, reason: err.message };
+    }
+
+    if (family === "rsa" || family === "rsa-pss") {
+      const hash = (family === "rsa" ? RSA_ALGS : RSA_PSS_ALGS)[alg];
+      const key = await crypto.subtle.importKey(
+        "spki",
+        keyBytes,
+        family === "rsa" ? { name: "RSASSA-PKCS1-v1_5", hash } : { name: "RSA-PSS", hash },
+        false,
+        ["verify"],
+      );
+      const algoParam = family === "rsa" ? "RSASSA-PKCS1-v1_5" : { name: "RSA-PSS", saltLength: PSS_SALT_LENGTH[hash] };
+      const valid = await crypto.subtle.verify(algoParam, key, signatureBytes, signingInput);
+      return { alg, family, checked: true, valid, reason: valid ? "Signature matches." : "Signature does not match this key." };
+    }
+
+    // family === "ec" — JWS signatures are raw r||s, which is also what
+    // SubtleCrypto's ECDSA verify expects, so no re-encoding is needed.
+    const { hash, namedCurve } = EC_ALGS[alg];
+    const key = await crypto.subtle.importKey("spki", keyBytes, { name: "ECDSA", namedCurve }, false, ["verify"]);
+    const valid = await crypto.subtle.verify({ name: "ECDSA", hash }, key, signatureBytes, signingInput);
+    return { alg, family, checked: true, valid, reason: valid ? "Signature matches." : "Signature does not match this key." };
+  } catch {
+    return { alg, family, checked: false, valid: false, reason: "Could not read that key. Check it's an SPKI public key in PEM format." };
+  }
+}
+
 // --- UI ---------------------------------------------------------------------
 
 const SAMPLE_HINT = "Paste a token. It is decoded in the popup; nothing is sent anywhere.";
@@ -141,13 +264,39 @@ export function init(root) {
   const payload = outputBlock("Payload");
   const signature = el("div", { class: "sig mono" });
 
+  // Verification inputs. Deliberately left out of persist() below: a signing
+  // secret or private deployment's key is more sensitive than the token
+  // itself, so it stays in memory only and is never written to
+  // chrome.storage, even with "Remember input" on.
+  const secretInput = el("input", {
+    type: "text",
+    class: "mono",
+    spellcheck: false,
+    autocapitalize: "off",
+    placeholder: "Signing secret",
+  });
+  const keyInput = el("textarea", {
+    rows: 3,
+    class: "mono",
+    spellcheck: false,
+    autocapitalize: "off",
+    placeholder: "-----BEGIN PUBLIC KEY-----\n...\n-----END PUBLIC KEY-----",
+  });
+  const verifyStatus = statusLine();
+  const secretField = field("Signing secret", secretInput, "Not saved, even with Remember input on.");
+  const keyField = field("Public key (SPKI, PEM)", keyInput, "Not saved, even with Remember input on.");
+  secretField.classList.add("hidden");
+  keyField.classList.add("hidden");
+
   const signatureBlock = el("section", { class: "block" }, [
     el("div", { class: "block-head" }, [
       el("h2", { class: "block-title", text: "Signature" }),
       copyButton(() => signature.textContent),
     ]),
     signature,
-    el("p", { class: "hint", text: "Not verified. v1 decodes only." }),
+    secretField,
+    keyField,
+    verifyStatus,
   ]);
 
   root.append(
@@ -173,12 +322,21 @@ export function init(root) {
     signatureBlock,
   );
 
+  // Bumped on every render so a verify Promise that resolves after the token
+  // (or secret/key) has already changed again is discarded instead of
+  // overwriting a newer result.
+  let verifyGeneration = 0;
+  let currentAlg;
+
   function render() {
     badges.textContent = "";
     claims.textContent = "";
     header.body.textContent = "";
     payload.body.textContent = "";
     signature.textContent = "";
+    secretField.classList.add("hidden");
+    keyField.classList.add("hidden");
+    setStatus(verifyStatus, "");
 
     const raw = input.value.trim();
     if (!raw) {
@@ -215,9 +373,32 @@ export function init(root) {
     }
 
     renderClaims(claims, decoded.payload);
+    currentAlg = decoded.header.alg;
+    runVerify(raw);
+  }
+
+  function runVerify(raw) {
+    const family = algFamily(currentAlg);
+    secretField.classList.toggle("hidden", family !== "hmac");
+    keyField.classList.toggle("hidden", !["rsa", "rsa-pss", "ec"].includes(family));
+
+    verifyGeneration += 1;
+    const generation = verifyGeneration;
+    verifyJwtSignature(raw, { secret: secretInput.value, publicKeyPem: keyInput.value })
+      .then((result) => {
+        if (generation !== verifyGeneration) return; // stale: input changed since this call started
+        const tone = !result.checked ? "muted" : result.valid ? "ok" : "err";
+        setStatus(verifyStatus, `${result.alg}: ${result.reason}`, tone);
+      })
+      .catch((err) => {
+        if (generation !== verifyGeneration) return;
+        setStatus(verifyStatus, err.message, "err");
+      });
   }
 
   input.addEventListener("input", render);
+  secretInput.addEventListener("input", () => runVerify(input.value.trim()));
+  keyInput.addEventListener("input", () => runVerify(input.value.trim()));
   persist("jwt", { token: input }, render);
   render();
 }

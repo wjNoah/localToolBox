@@ -6,3 +6,4 @@ dist/
 .mcp.json
 skills-lock.json
 .claude
+.gitignore

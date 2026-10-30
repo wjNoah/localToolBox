@@ -14,9 +14,15 @@ Paste a token to see the decoded header and payload as formatted JSON. `exp`,
 label ("valid for 29 min", "expired 3 min ago"), and the top line gives the
 verdict for the whole token.
 
-Decode only — the signature is displayed but **not verified**. Base64url and
-UTF-8 are handled correctly, and malformed tokens get a specific error (wrong
-part count, bad base64url, invalid JSON, non-object segment).
+Base64url and UTF-8 are handled correctly, and malformed tokens get a specific
+error (wrong part count, bad base64url, invalid JSON, non-object segment).
+
+Signature verification runs entirely through `SubtleCrypto`: HS256/384/512
+against a secret you paste, and RS256/384/512, PS256/384/512 and ES256/384/512
+against an SPKI public key in PEM form. `alg: "none"` is always flagged
+invalid. The secret/key field is **never persisted** — it's excluded from the
+input store even with "Remember input" on, since a signing key is more
+sensitive than the token itself.
 
 ### Base64
 
@@ -28,6 +34,12 @@ non-ASCII round-trips correctly. A second mode does component-level URL
 
 Auto-detect only decodes when the input both looks like Base64 and decodes to
 valid text, so ordinary words are not mistaken for encoded data.
+
+A third mode parses a query string (or a full URL with one) into its key/value
+pairs — shown as formatted JSON and as a raw-pairs table, so repeated keys
+(`tag=a&tag=b`) stay visible instead of silently collapsing. The same mode
+runs in reverse: paste a JSON object and it's built back into a query string,
+with array values repeating the key.
 
 ### Time
 

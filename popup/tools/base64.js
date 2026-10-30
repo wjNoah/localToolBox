@@ -74,15 +74,89 @@ export function convertUrl(text, direction) {
   return { direction, output: encodeURIComponent(text), note: "percent-encoded (component level)" };
 }
 
+/**
+ * Parse a query string, or a full URL that has one, into its key/value pairs.
+ * Repeated keys collapse into an array in `obj`, matching how most servers
+ * read `a=1&a=2`.
+ * @returns {{pairs: [string, string][], obj: Record<string, string|string[]>}}
+ * @throws {Error} when there is nothing to parse.
+ */
+export function parseQueryString(text) {
+  const trimmed = String(text).trim();
+  if (!trimmed) throw new Error("Paste a URL or query string.");
+
+  const qIndex = trimmed.indexOf("?");
+  const search = (qIndex === -1 ? trimmed : trimmed.slice(qIndex + 1)).replace(/^[?&]+/, "").replace(/#.*$/, "");
+  // URLSearchParams happily parses plain prose as one key with an empty
+  // value ("no query here" → {"no query here": ""}), so require an explicit
+  // "?" or at least one "key=value" pair before trusting the result.
+  if (!search || !(qIndex !== -1 || search.includes("="))) {
+    throw new Error("No query parameters found — paste something with a ?a=b&c=d part.");
+  }
+
+  const pairs = [...new URLSearchParams(search).entries()];
+  if (pairs.length === 0) throw new Error("No query parameters found.");
+
+  const obj = {};
+  for (const [key, value] of pairs) {
+    if (key in obj) obj[key] = Array.isArray(obj[key]) ? [...obj[key], value] : [obj[key], value];
+    else obj[key] = value;
+  }
+  return { pairs, obj };
+}
+
+/**
+ * Build a query string from a flat JSON object. Array values repeat the key
+ * (`{"a":[1,2]}` → `a=1&a=2`); null/undefined values are dropped.
+ * @throws {Error} on invalid JSON or a non-object document.
+ */
+export function buildQueryString(jsonText) {
+  let value;
+  try {
+    value = JSON.parse(jsonText);
+  } catch (err) {
+    throw new Error(`Not valid JSON: ${err.message}`);
+  }
+  if (value === null || typeof value !== "object" || Array.isArray(value)) {
+    throw new Error("JSON must be an object of key → value pairs, e.g. {\"a\": 1, \"b\": \"two\"}.");
+  }
+
+  const params = new URLSearchParams();
+  for (const [key, val] of Object.entries(value)) {
+    if (val === null || val === undefined) continue;
+    for (const item of Array.isArray(val) ? val : [val]) params.append(key, String(item));
+  }
+  return params.toString();
+}
+
+/** Build when the input parses as a JSON object; parse otherwise. */
+export function detectQueryDirection(text) {
+  return /^\s*\{/.test(String(text)) ? "encode" : "decode";
+}
+
 export function convert(text, { mode, direction, urlSafe, padding }) {
   const resolved =
     direction !== "auto"
       ? direction
       : mode === "url"
         ? detectUrlDirection(text)
-        : detectBase64Direction(text);
+        : mode === "query"
+          ? detectQueryDirection(text)
+          : detectBase64Direction(text);
 
-  const result = mode === "url" ? convertUrl(text, resolved) : convertBase64(text, resolved, { urlSafe, padding });
+  let result;
+  if (mode === "url") {
+    result = convertUrl(text, resolved);
+  } else if (mode === "query") {
+    if (resolved === "encode") {
+      result = { direction: resolved, output: buildQueryString(text), note: "built from JSON" };
+    } else {
+      const { obj, pairs } = parseQueryString(text);
+      result = { direction: resolved, output: JSON.stringify(obj, null, 2), note: `parsed ${pairs.length} param${pairs.length === 1 ? "" : "s"}`, pairs };
+    }
+  } else {
+    result = convertBase64(text, resolved, { urlSafe, padding });
+  }
   return { ...result, auto: direction === "auto" };
 }
 
@@ -94,6 +168,7 @@ export function init(root) {
   const mode = el("select", {}, [
     el("option", { value: "base64", text: "Base64" }),
     el("option", { value: "url", text: "URL (percent) encoding" }),
+    el("option", { value: "query", text: "Query string" }),
   ]);
 
   const direction = el("select", {}, [
@@ -120,6 +195,7 @@ export function init(root) {
 
   const status = statusLine();
   const output = outputBlock("Output");
+  const paramsTable = el("div", { class: "hidden" });
 
   const useOutput = el("button", {
     class: "btn ghost small",
@@ -141,17 +217,25 @@ export function init(root) {
     field("Input", input),
     status,
     output.wrap,
+    paramsTable,
   );
 
   function syncOptionVisibility() {
     // The padding/alphabet switches only affect Base64 encoding.
     const relevant = mode.value === "base64" && direction.value !== "decode";
     options.classList.toggle("hidden", !relevant);
+
+    input.placeholder =
+      mode.value === "query"
+        ? 'A URL or query string to parse, or JSON like {"a": 1} to build one'
+        : "Text to encode, or Base64 to decode";
   }
 
   function render() {
     syncOptionVisibility();
     output.body.textContent = "";
+    paramsTable.textContent = "";
+    paramsTable.classList.add("hidden");
 
     const text = input.value;
     if (!text) {
@@ -169,6 +253,7 @@ export function init(root) {
       output.body.textContent = result.output;
       const prefix = result.auto ? `Auto: ${result.direction} — ` : "";
       setStatus(status, `${prefix}${result.note}`, "ok");
+      if (result.pairs) renderParamsTable(paramsTable, result.pairs);
     } catch (err) {
       setStatus(status, err.message, "err");
     }
@@ -186,4 +271,17 @@ export function init(root) {
 function checkbox(labelText, control) {
   if (!control.id) control.id = `ldt-cb-${labelText.replace(/\W+/g, "")}`;
   return el("div", { class: "check" }, [control, el("label", { for: control.id, text: labelText })]);
+}
+
+/** Every raw pair in order, so repeated keys stay visible as separate rows. */
+function renderParamsTable(container, pairs) {
+  container.classList.remove("hidden");
+  for (const [key, value] of pairs) {
+    container.append(
+      el("div", { class: "kv-row" }, [
+        el("span", { class: "kv-key mono", text: key }),
+        el("span", { class: "kv-value mono", text: value }),
+      ]),
+    );
+  }
 }
