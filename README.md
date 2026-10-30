@@ -14,7 +14,7 @@ somewhere and don't want it to end up on a random website.
 - [Updating and uninstalling](#updating-and-uninstalling)
 - [Privacy](#privacy)
 - [Troubleshooting](#troubleshooting)
-- [Development](#development)
+- [Development](#development) — [Publishing](#publishing-to-the-chrome-web-store)
 - [License](#license)
 
 ## Tools
@@ -232,7 +232,7 @@ This is the point of the extension — people paste real tokens into these tools
 - JWT signing secrets and public keys are never stored, even with
   "Remember input" on.
 
-You can check this yourself: `manifest.json` is 23 lines, and
+You can check this yourself: `manifest.json` is short enough to read in a minute, and
 `grep -rn "fetch\|XMLHttpRequest\|WebSocket" popup` comes back empty.
 
 ## Troubleshooting
@@ -267,6 +267,7 @@ need the ↻ reload on the extensions page.
 
 ```
 manifest.json          Manifest V3, only the "storage" permission
+icons/                 Toolbar and store icons (generated)
 popup/popup.html       Popup shell with tabs
 popup/popup.css        Styles (light/dark via prefers-color-scheme)
 popup/popup.js         Tab switching, keyboard nav, lazy init of each tool
@@ -276,6 +277,10 @@ popup/ui.js            Shared DOM helpers and the opt-in input store
 popup/tools/*.js       One module per tool, each exports init(root)
 popup/tools/regex-core.js    Regex logic, shared by the tool and its Worker
 popup/tools/regex-worker.js  Runs patterns off the main thread
+scripts/               Packaging, icon and store-asset scripts (not shipped)
+store/                 Store screenshots, promo tile and their HTML sources (not shipped)
+STORE.md               Chrome Web Store listing and submission checklist
+PRIVACY.md             Privacy policy linked from the store listing
 ```
 
 Each tool keeps its logic in pure exported functions (`decodeJwt`,
@@ -290,13 +295,22 @@ can be unit tested without a browser.
 - User input reaches the DOM only through `textContent`; `innerHTML` is never
   assigned anywhere in the codebase
 
-### Packaging a ZIP
+### Scripts
 
-For sharing a build or uploading to a store dashboard:
+All standard library / built-in tools, nothing to install.
 
-```bash
-zip -r local-dev-toolbox.zip manifest.json popup LICENSE
-```
+| Command                          | What it does                                                   |
+| -------------------------------- | -------------------------------------------------------------- |
+| `./scripts/package.sh`           | Builds `dist/local-dev-toolbox-<version>.zip` for the store    |
+| `python3 scripts/build-icons.py` | Regenerates `icons/icon-{16,32,48,128}.png`                    |
+| `./scripts/store-assets.sh`      | Renders store screenshots and promo tile into `store/` (needs Chrome) |
+
+### Publishing to the Chrome Web Store
+
+[STORE.md](STORE.md) has the whole checklist plus every text the developer
+dashboard asks for (description, single purpose, permission justification,
+data-usage answers), ready to paste. The privacy policy is
+[PRIVACY.md](PRIVACY.md).
 
 ## License
 

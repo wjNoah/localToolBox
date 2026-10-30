@@ -1,0 +1,190 @@
+<!doctype html>
+<!--
+  Chrome Web Store screenshot frame, 1280x800. Loads the real popup in an
+  iframe and fills one tool with sample data: frame.html?shot=jwt|json|time
+  Rendered by scripts/store-assets.sh; not part of the extension package.
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Store screenshot</title>
+    <style>
+      * { box-sizing: border-box; }
+      html, body { margin: 0; width: 1280px; height: 800px; overflow: hidden; }
+      :root {
+        --paper: #f3eee4;
+        --ink: #1f1c18;
+        --ink-2: #5e574d;
+        --rule: #d8cfbf;
+        --accent: #c8601c;
+        --serif: "Iowan Old Style", "Charter", "Georgia", serif;
+        --mono: "SF Mono", "Menlo", "Consolas", monospace;
+      }
+      body {
+        display: grid;
+        grid-template-columns: 1fr 480px;
+        align-items: center;
+        gap: 72px;
+        padding: 0 88px;
+        background: var(--paper);
+        color: var(--ink);
+        font-family: var(--serif);
+      }
+      .brand { display: flex; align-items: center; gap: 12px; margin: 0 0 40px; font: 600 17px/1 var(--mono); }
+      .brand img { width: 40px; height: 40px; margin: -5px; }
+      h1 { font-size: 50px; line-height: 1.12; font-weight: 600; margin: 0 0 22px; letter-spacing: -.01em; }
+      p { font-size: 23px; line-height: 1.45; margin: 0 0 40px; color: var(--ink-2); max-width: 500px; }
+      dl {
+        display: grid;
+        grid-template-columns: 150px 1fr;
+        margin: 0;
+        border-top: 1px solid var(--rule);
+        font: 15px/1 var(--mono);
+      }
+      dt, dd { margin: 0; padding: 13px 0; border-bottom: 1px solid var(--rule); }
+      dt { color: var(--ink-2); }
+      dd b { color: var(--accent); font-weight: 600; }
+      .popup {
+        width: 480px;
+        height: 600px;
+        border: 1px solid var(--ink);
+        border-radius: 10px;
+        background: #1e1e1e;
+        box-shadow: 8px 8px 0 var(--rule);
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <div class="brand"><img src="../icons/icon-48.png" alt="" />local-dev-toolbox</div>
+      <h1 id="headline"></h1>
+      <p id="sub"></p>
+      <dl>
+        <dt>permissions</dt><dd>storage</dd>
+        <dt>network</dt><dd><b>none</b> — connect-src 'none'</dd>
+        <dt>saved input</dt><dd>off unless you turn it on</dd>
+      </dl>
+    </div>
+    <iframe class="popup" id="popup" src="../popup/popup.html"></iframe>
+
+    <script type="module">
+      const shots = {
+        jwt: {
+          headline: "Read a JWT without pasting it into a website.",
+          sub: "Claims, expiry and signature check, worked out in the popup on your own machine.",
+          fill: fillJwt,
+        },
+        json: {
+          headline: "See exactly what changed between two configs.",
+          sub: "Pretty-print, minify and validate JSON, or diff two documents path by path.",
+          fill: fillJson,
+        },
+        time: {
+          headline: "Turn 1793352841 into a date you can read.",
+          sub: "Seconds through nanoseconds, ISO 8601, time zones and \"3 h ago\", one click to copy.",
+          fill: fillTime,
+        },
+      };
+
+      const shot = shots[new URLSearchParams(location.search).get("shot")] ?? shots.jwt;
+      document.getElementById("headline").textContent = shot.headline;
+      document.getElementById("sub").textContent = shot.sub;
+
+      const frame = document.getElementById("popup");
+      frame.addEventListener("load", async () => {
+        const doc = frame.contentDocument;
+        // Scripted clicks would otherwise leave a focus ring and a half-finished
+        // tab transition in the capture.
+        const still = doc.createElement("style");
+        still.textContent = "*{transition:none!important} :focus-visible{outline:none!important}";
+        doc.head.append(still);
+        await shot.fill(doc);
+        // No focus ring from the scripted clicks; let the tab indicator settle.
+        doc.activeElement?.blur();
+        await new Promise((resolve) => setTimeout(resolve, 600));
+        // Size the frame to the popup, as Chrome does for the real one.
+        frame.style.height = `${doc.body.scrollHeight}px`;
+      });
+
+      const tick = () => new Promise((resolve) => setTimeout(resolve, 150));
+
+      function type(node, value) {
+        node.value = value;
+        node.dispatchEvent(new Event("input", { bubbles: true }));
+        node.dispatchEvent(new Event("change", { bubbles: true }));
+      }
+
+      async function openTab(doc, name) {
+        doc.getElementById(`tabbtn-${name}`).click();
+        await tick();
+        return doc.getElementById(`tab-${name}`);
+      }
+
+      const b64url = (bytes) =>
+        btoa(String.fromCharCode(...bytes)).replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+      const enc = (value) => b64url(new TextEncoder().encode(JSON.stringify(value)));
+
+      async function fillJwt(doc) {
+        const now = Math.floor(Date.now() / 1000);
+        const secret = "orders-svc-dev-signing-key-2026";
+        const header = { alg: "HS256", typ: "JWT", kid: "orders-2026-10" };
+        const payload = {
+          iss: "https://auth.acme-internal.dev",
+          sub: "svc-orders",
+          aud: "inventory-api",
+          scope: "inventory:read inventory:reserve",
+          iat: now - 60,
+          nbf: now - 60,
+          exp: now + 29 * 60,
+          jti: "4f1c2e9a-7b3d-4c8e-9a51-2d6f0b8e3c17",
+        };
+        const signingInput = `${enc(header)}.${enc(payload)}`;
+        const key = await crypto.subtle.importKey(
+          "raw", new TextEncoder().encode(secret), { name: "HMAC", hash: "SHA-256" }, false, ["sign"],
+        );
+        const sig = new Uint8Array(await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signingInput)));
+
+        const panel = await openTab(doc, "jwt");
+        type(panel.querySelector("textarea"), `${signingInput}.${b64url(sig)}`);
+        await tick();
+        type(panel.querySelector('input[placeholder="Signing secret"]'), secret);
+        await tick();
+      }
+
+      async function fillJson(doc) {
+        const a = {
+          service: "orders",
+          image: "registry.acme.dev/orders:2.14.0",
+          replicas: 3,
+          env: { LOG_LEVEL: "info", DB_POOL_SIZE: 20 },
+          ports: [8080, 9090],
+        };
+        const b = {
+          service: "orders",
+          image: "registry.acme.dev/orders:2.15.0",
+          replicas: 5,
+          env: { LOG_LEVEL: "debug", DB_POOL_SIZE: 20, FEATURE_SPLIT_PAYMENTS: true },
+          ports: [8080, 9090, 9464],
+        };
+        const panel = await openTab(doc, "json");
+        const [docA, docB] = panel.querySelectorAll("textarea");
+        type(docA, JSON.stringify(a, null, 2));
+        type(docB, JSON.stringify(b, null, 2));
+        await tick();
+        [...panel.querySelectorAll("button")].find((node) => node.textContent.includes("Diff")).click();
+        await tick();
+        // Scroll the popup so the diff result is what's on screen.
+        const main = doc.querySelector("main");
+        const toolbar = panel.querySelector(".toolbar");
+        main.scrollTop = toolbar.getBoundingClientRect().top - main.getBoundingClientRect().top - 12;
+      }
+
+      async function fillTime(doc) {
+        const panel = await openTab(doc, "timestamp");
+        type(panel.querySelector("select"), "Europe/Berlin");
+        type(panel.querySelector("input"), String(Date.now() - 3 * 60 * 60 * 1000));
+        await tick();
+      }
+    </script>
+  </body>
+</html>

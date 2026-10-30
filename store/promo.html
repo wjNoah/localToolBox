@@ -1,0 +1,41 @@
+<!doctype html>
+<!-- Chrome Web Store small promo tile, 440x280. Rendered by scripts/store-assets.sh. -->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Promo tile</title>
+    <style>
+      html, body { margin: 0; width: 440px; height: 280px; overflow: hidden; }
+      body {
+        display: flex;
+        flex-direction: column;
+        justify-content: center;
+        padding: 0 34px;
+        box-sizing: border-box;
+        background: #f3eee4;
+        color: #1f1c18;
+        font-family: "Iowan Old Style", "Charter", "Georgia", serif;
+      }
+      .brand { display: flex; align-items: center; gap: 14px; margin-bottom: 20px; }
+      /* The 128px icon has 16px of built-in padding; pull it back into line. */
+      img { width: 76px; height: 76px; margin: -9.5px; }
+      h1 { font-size: 32px; line-height: 1.05; font-weight: 600; margin: 0 0 0 10px; }
+      p { font-size: 19px; line-height: 1.35; margin: 0 0 18px; color: #5e574d; }
+      .tools {
+        padding-top: 12px;
+        border-top: 1px solid #d8cfbf;
+        font: 13px/1 "SF Mono", "Menlo", "Consolas", monospace;
+        color: #1f1c18;
+      }
+      .tools b { color: #c8601c; font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <div class="brand">
+      <img src="../icons/icon-128.png" alt="" />
+      <h1>Local Dev<br />Toolbox</h1>
+    </div>
+    <p>Developer utilities that never leave your machine.</p>
+    <div class="tools">jwt · base64 · time · json · regex &nbsp;<b>offline</b></div>
+  </body>
+</html>
