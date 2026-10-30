@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Local Dev Toolbox</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header class="titlebar">
+      <h1>Local Dev Toolbox</h1>
+      <!-- The privacy claim is the premise, so it is stated, not implied. -->
+      <span class="offline">
+        <svg viewBox="0 0 16 16" aria-hidden="true" focusable="false">
+          <path d="M8 1a3.5 3.5 0 0 0-3.5 3.5V6H4a1.5 1.5 0 0 0-1.5 1.5v5A1.5 1.5 0 0 0 4 14h8a1.5 1.5 0 0 0 1.5-1.5v-5A1.5 1.5 0 0 0 12 6h-.5V4.5A3.5 3.5 0 0 0 8 1Zm2 5H6V4.5a2 2 0 1 1 4 0V6Z" />
+        </svg>
+        Stays on this device
+      </span>
+    </header>
+
+    <!-- A segmented control: five equal segments for switching between the
+         tools, keyboard-navigable as a tablist. -->
+    <nav>
+      <div class="seg" role="tablist" aria-label="Tools">
+        <button class="seg-item" role="tab" id="tabbtn-jwt" data-tab="jwt" aria-controls="tab-jwt" aria-selected="true">JWT</button>
+        <button class="seg-item" role="tab" id="tabbtn-base64" data-tab="base64" aria-controls="tab-base64" aria-selected="false" tabindex="-1">Base64</button>
+        <button class="seg-item" role="tab" id="tabbtn-timestamp" data-tab="timestamp" aria-controls="tab-timestamp" aria-selected="false" tabindex="-1">Time</button>
+        <button class="seg-item" role="tab" id="tabbtn-json" data-tab="json" aria-controls="tab-json" aria-selected="false" tabindex="-1">JSON</button>
+        <button class="seg-item" role="tab" id="tabbtn-regex" data-tab="regex" aria-controls="tab-regex" aria-selected="false" tabindex="-1">Regex</button>
+      </div>
+    </nav>
+
+    <main>
+      <section id="tab-jwt" role="tabpanel" aria-labelledby="tabbtn-jwt" tabindex="0" class="panel active"></section>
+      <section id="tab-base64" role="tabpanel" aria-labelledby="tabbtn-base64" tabindex="0" class="panel"></section>
+      <section id="tab-timestamp" role="tabpanel" aria-labelledby="tabbtn-timestamp" tabindex="0" class="panel"></section>
+      <section id="tab-json" role="tabpanel" aria-labelledby="tabbtn-json" tabindex="0" class="panel"></section>
+      <section id="tab-regex" role="tabpanel" aria-labelledby="tabbtn-regex" tabindex="0" class="panel"></section>
+    </main>
+
+    <footer>
+      <div class="check">
+        <input type="checkbox" role="switch" id="remember" class="switch" aria-describedby="remember-hint" />
+        <label for="remember" id="remember-hint" title="Off by default. While off, pasted tokens stay in memory only.">Remember input</label>
+      </div>
+      <button type="button" id="clear-stored" class="btn small">Clear saved input</button>
+    </footer>
+
+    <div id="live" class="sr-only" role="status" aria-live="polite"></div>
+
+    <script type="module" src="popup.js"></script>
+  </body>
+</html>

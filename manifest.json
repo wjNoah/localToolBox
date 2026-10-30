@@ -1,0 +1,23 @@
+{
+  "manifest_version": 3,
+  "name": "Local Dev Toolbox",
+  "version": "0.1.0",
+  "description": "Small developer utilities (JWT, Base64, timestamps, JSON, regex) that run 100% locally. No account, no network.",
+  "action": {
+    "default_title": "Local Dev Toolbox",
+    "default_popup": "popup/popup.html"
+  },
+  "permissions": ["storage"],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Ctrl+Shift+Y",
+        "mac": "Command+Shift+Y"
+      },
+      "description": "Open Local Dev Toolbox"
+    }
+  },
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'self'; connect-src 'none'"
+  }
+}

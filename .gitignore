@@ -1,0 +1,8 @@
+.DS_Store
+node_modules/
+dist/
+.agents
+*.zip
+.mcp.json
+skills-lock.json
+.claude

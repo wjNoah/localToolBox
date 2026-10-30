@@ -1,0 +1,910 @@
+/* Local Dev Toolbox — visual design.
+ *
+ * Grounded in Apple's HIG for macOS, translated to a 480 px extension popup.
+ * The design is deliberately quiet: these tools' *content* is the colorful part
+ * (regex highlights, JSON diffs, validity tones), so the chrome stays
+ * grayscale. Colour is spent in exactly three places — the focus ring and
+ * prominent action, the verdict tone, and the match highlight.
+ *
+ * Every colour below is a role, not a hue (color.md > System colors), and every
+ * text pair clears 4.5:1 in both appearances.
+ */
+
+:root {
+  color-scheme: light dark;
+
+  /* Surfaces: three levels. Content sits on `surface`; bars use `chrome`;
+     anything the tool *computed* sits in a sunken well. */
+  --surface: #ffffff;
+  --chrome: #f6f6f8;
+  --sunken: #f2f2f5;
+  --raised: #ffffff;
+
+  /* Content, in Apple's four label levels (labels.md > Best practices). */
+  --label: #1d1d1f;          /* 16.83:1 on surface */
+  --label-2: #5c5c61;        /* 6.65:1 on surface, 5.95:1 on sunken */
+  --label-3: #6e6e75;        /* 5.06:1 on surface, 4.53:1 on sunken */
+
+  --separator: #d6d6db;
+  --separator-strong: #c2c2c9;
+  --fill: #ececed;           /* bordered button rest */
+  --fill-active: #dededf;    /* bordered button press */
+
+  --accent: #0056d6;         /* 6.36:1 both directions against white */
+  --accent-fill: #0056d6;
+  --on-accent: #ffffff;
+  --focus-ring: rgba(0, 86, 214, 0.35);
+
+  --ok: #0f7a33;             /* 5.45:1 on surface */
+  --warn: #8a5a00;           /* 5.93:1 */
+  --err: #b3261e;            /* 6.54:1 */
+
+  --mark-bg: #ffdf80;
+  --mark-fg: #3a2c00;        /* 10.47:1 */
+  --add-bg: #e3f3e8;
+  --del-bg: #fbe6e6;
+  --chg-bg: #fcf2dc;
+
+  --shadow-raised: 0 1px 2px rgba(0, 0, 0, 0.12), 0 0 0 0.5px rgba(0, 0, 0, 0.06);
+
+  /* macOS built-in text styles (typography.md > macOS built-in text styles). */
+  --text-headline: 600 13px/16px var(--font-ui);
+  --text-body: 400 13px/16px var(--font-ui);
+  --text-subhead: 400 11px/14px var(--font-ui);
+  --text-subhead-em: 600 11px/14px var(--font-ui);
+
+  --font-ui: system-ui, -apple-system, "SF Pro Text", "Segoe UI", sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+
+  --radius: 6px;
+  --radius-lg: 8px;
+  --gap: 10px;
+  --inset: 14px;
+  --ease: cubic-bezier(0.2, 0, 0.2, 1);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --surface: #1e1e20;
+    --chrome: #26262a;
+    --sunken: #161618;
+    --raised: #3a3a40;
+
+    --label: #f2f2f5;        /* 14.90:1 on surface */
+    --label-2: #a1a1a8;      /* 6.48:1 on surface, 7.04:1 on sunken */
+    --label-3: #8e8e96;      /* 5.12:1 on surface */
+
+    --separator: #3a3a3f;
+    --separator-strong: #4a4a50;
+    --fill: #35353a;
+    --fill-active: #44444a;
+
+    --accent: #6aa8ff;       /* 6.86:1 as text on surface */
+    --accent-fill: #1a63d8;  /* 5.50:1 against white — the light-mode blue
+                                tinted for dark would only reach 2.85:1 */
+    --on-accent: #ffffff;
+    --focus-ring: rgba(106, 168, 255, 0.4);
+
+    --ok: #4ec97a;           /* 7.89:1 */
+    --warn: #e0b341;         /* 8.48:1 */
+    --err: #ff8a80;          /* 7.29:1 */
+
+    --mark-bg: #5e4b00;
+    --mark-fg: #ffe9a8;      /* 7.04:1 */
+    --add-bg: #19341f;
+    --del-bg: #3f1c1b;
+    --chg-bg: #382c10;
+
+    --shadow-raised: 0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 0.5px rgba(255, 255, 255, 0.08);
+  }
+}
+
+/* Increase Contrast: stronger separators and fills, not different hues
+   (color.md > Best practices). */
+@media (prefers-contrast: more) {
+  :root {
+    --separator: var(--separator-strong);
+    --label-2: var(--label);
+    --label-3: var(--label);
+  }
+  .seg-item[aria-selected="true"],
+  textarea,
+  input[type="text"],
+  select {
+    border-color: var(--label-2);
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  width: 480px;
+  min-height: 360px;
+  max-width: 100%;
+  background: var(--surface);
+  color: var(--label);
+  font: var(--text-body);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* --- window chrome --------------------------------------------------------
+ * Title bar and segmented control form one functional layer above the
+ * content, separated by a hairline rather than a heavy fill
+ * (layout.md > Visual hierarchy: "Differentiate controls from content"). */
+
+.titlebar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 9px var(--inset) 8px;
+  background: var(--chrome);
+}
+
+h1 {
+  margin: 0;
+  font: var(--text-headline);
+  letter-spacing: -0.01em;
+}
+
+/* The privacy claim is the product's whole premise, so it earns a permanent
+   spot — but as a status mark, not a badge competing with the title. */
+.offline {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font: var(--text-subhead);
+  color: var(--label-2);
+  white-space: nowrap;
+}
+
+.offline svg {
+  width: 11px;
+  height: 11px;
+  flex: none;
+  fill: currentColor;
+}
+
+/* Segmented control for view switching (segmented-controls.md): five equal
+   segments, within Apple's "no more than five to seven" limit, rendered as the
+   macOS raised-pill-on-track style. */
+nav {
+  padding: 0 var(--inset) 10px;
+  background: var(--chrome);
+  border-bottom: 1px solid var(--separator);
+}
+
+.seg {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  background: var(--sunken);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-lg);
+}
+
+.seg-item {
+  flex: 1 1 0;
+  min-width: 0;
+  appearance: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--label-2);
+  font: var(--text-body);
+  /* 24 px fill inside a 28 px track: macOS default control size
+     (accessibility.md > Offering sufficiently sized controls). */
+  min-height: 24px;
+  padding: 3px 6px;
+  cursor: default;
+  transition: background 120ms var(--ease), color 120ms var(--ease);
+}
+
+.seg-item:hover:not([aria-selected="true"]) {
+  color: var(--label);
+}
+
+.seg-item:active:not([aria-selected="true"]) {
+  background: var(--fill-active);
+}
+
+.seg-item[aria-selected="true"] {
+  background: var(--raised);
+  border-color: var(--separator);
+  color: var(--label);
+  font: var(--text-headline);
+  box-shadow: var(--shadow-raised);
+}
+
+/* --- content -------------------------------------------------------------- */
+
+main {
+  padding: 0 var(--inset) var(--inset);
+  max-height: 418px;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Scroll edge effect: content fades where it meets the bar instead of
+   colliding with it (layout.md > Visual hierarchy). */
+main::before {
+  content: "";
+  display: block;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  height: 12px;
+  margin-bottom: -12px;
+  background: linear-gradient(to bottom, var(--surface) 35%, transparent);
+  pointer-events: none;
+}
+
+.panel {
+  display: none;
+  padding-top: var(--inset);
+}
+
+.panel.active {
+  display: block;
+}
+
+/* macOS focus ring: an accent halo outside a tinted border. */
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+  border-radius: 4px;
+}
+
+.seg-item:focus-visible {
+  outline-offset: -1px;
+}
+
+footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--gap);
+  padding: 8px var(--inset);
+  border-top: 1px solid var(--separator);
+  background: var(--chrome);
+}
+
+.hidden {
+  display: none !important;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* --- form controls -------------------------------------------------------- */
+
+.field {
+  margin: 0 0 var(--gap);
+}
+
+.row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--gap);
+}
+
+.row > .field {
+  flex: 1 1 160px;
+  min-width: 0;
+}
+
+/* Sentence case, not uppercase tracking: boxes.md > Content asks for
+   sentence-style capitalization, and hierarchy comes from size and weight. */
+label {
+  display: block;
+  margin-bottom: 5px;
+  font: var(--text-subhead-em);
+  color: var(--label-2);
+}
+
+textarea,
+input[type="text"],
+select {
+  width: 100%;
+  padding: 6px 8px;
+  min-height: 28px;
+  background: var(--surface);
+  color: var(--label);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius);
+  font: var(--text-body);
+  transition: border-color 120ms var(--ease), box-shadow 120ms var(--ease);
+}
+
+textarea:focus-visible,
+input[type="text"]:focus-visible,
+select:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--focus-ring);
+}
+
+textarea::placeholder,
+input::placeholder {
+  color: var(--label-3);
+}
+
+textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+
+select {
+  appearance: none;
+  padding-right: 24px;
+  background-image: linear-gradient(45deg, transparent 50%, currentColor 50%),
+    linear-gradient(135deg, currentColor 50%, transparent 50%);
+  background-position: calc(100% - 13px) 55%, calc(100% - 8px) 55%;
+  background-size: 5px 5px;
+  background-repeat: no-repeat;
+}
+
+.mono,
+code,
+pre {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0 0 var(--gap);
+}
+
+.toolbar.wrap {
+  flex-wrap: wrap;
+}
+
+/* Bordered is the default macOS action style; text stays at the primary label
+   colour, so it reads at 16.83:1 instead of white-on-blue. */
+.btn {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 4px 11px;
+  background: var(--fill);
+  color: var(--label);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius);
+  font: var(--text-body);
+  white-space: nowrap;
+  cursor: default;
+  transition: background 100ms var(--ease);
+}
+
+.btn:hover {
+  background: var(--fill-active);
+}
+
+/* buttons.md > Best practices: "Always include a press state for a custom
+   button." */
+.btn:active {
+  background: var(--separator);
+}
+
+.btn.prominent {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: transparent;
+}
+
+.btn.prominent:hover {
+  filter: brightness(1.1);
+}
+
+.btn.prominent:active {
+  filter: brightness(0.92);
+}
+
+.btn.ghost {
+  background: transparent;
+  border-color: transparent;
+  color: var(--label-2);
+}
+
+.btn.ghost:hover {
+  background: var(--fill);
+  color: var(--label);
+}
+
+.btn.ghost:active {
+  background: var(--fill-active);
+}
+
+/* 22 px keeps small buttons above the 20 pt macOS minimum. */
+.btn.small {
+  min-height: 22px;
+  padding: 2px 8px;
+  font: var(--text-subhead);
+}
+
+/* Confirmation is carried by the word plus a checkmark, never by colour alone
+   (color.md > Inclusive color). The old green-on-blue read at 1.11:1. */
+.btn.flashed {
+  color: var(--label);
+  background: var(--fill-active);
+}
+
+.btn.flashed::before {
+  content: "\2713";
+  font-weight: 600;
+}
+
+.check {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  /* The checkbox alone is 16 px; the linked label extends the click target
+     past the 20 pt macOS minimum (accessibility.md > Offering sufficiently
+     sized controls). */
+  min-height: 22px;
+}
+
+/* macOS-style checkbox. The native control doesn't match the rest of the
+   chrome, and at its default size it is the smallest target in the popup. */
+input[type="checkbox"]:not(.switch) {
+  position: relative;
+  flex: none;
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  appearance: none;
+  background: var(--surface);
+  border: 1px solid var(--separator-strong);
+  border-radius: 4px;
+  cursor: default;
+  transition: background 100ms var(--ease), border-color 100ms var(--ease);
+}
+
+input[type="checkbox"]:not(.switch):hover {
+  border-color: var(--label-3);
+}
+
+input[type="checkbox"]:not(.switch):checked {
+  background: var(--accent-fill);
+  border-color: transparent;
+}
+
+/* A drawn checkmark, so the state reads as a shape and not only as a fill. */
+input[type="checkbox"]:not(.switch):checked::after {
+  content: "";
+  position: absolute;
+  left: 5px;
+  top: 2px;
+  width: 4px;
+  height: 8px;
+  border: solid var(--on-accent);
+  border-width: 0 1.75px 1.75px 0;
+  transform: rotate(42deg);
+}
+
+.check label {
+  margin: 0;
+  font: var(--text-body);
+  color: var(--label);
+  cursor: default;
+}
+
+.inline-field {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.inline-field label {
+  margin: 0;
+}
+
+.inline-field select {
+  width: auto;
+  min-height: 24px;
+  padding: 2px 22px 2px 7px;
+  font: var(--text-subhead);
+}
+
+.flags-line {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--gap);
+  margin-bottom: var(--gap);
+}
+
+.flags-line .toolbar {
+  margin: 0;
+}
+
+.flags-line .check label {
+  font-family: var(--font-mono);
+  font-size: 12px;
+}
+
+/* A real switch, the macOS control for an on/off setting
+   (toggles.md), instead of a bare web checkbox. */
+.switch {
+  position: relative;
+  flex: none;
+  width: 34px;
+  height: 20px;
+  margin: 0;
+  appearance: none;
+  background: var(--separator-strong);
+  border-radius: 999px;
+  cursor: default;
+  transition: background 150ms var(--ease);
+}
+
+.switch::after {
+  content: "";
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 16px;
+  height: 16px;
+  background: #ffffff;
+  border-radius: 50%;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3);
+  transition: transform 150ms var(--ease);
+}
+
+.switch:checked {
+  background: var(--accent-fill);
+}
+
+.switch:checked::after {
+  transform: translateX(14px);
+}
+
+/* --- text tones ----------------------------------------------------------- */
+
+.hint,
+.muted {
+  color: var(--label-3);
+  font: var(--text-subhead);
+}
+
+.hint {
+  margin: 5px 0 0;
+}
+
+.block {
+  margin: 0 0 12px;
+}
+
+.block-head {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 5px;
+  min-height: 22px;
+}
+
+.block-title {
+  margin: 0;
+  font: var(--text-subhead-em);
+  color: var(--label-2);
+  flex: 1;
+}
+
+/* The verdict line. The one place in the chrome where colour means something,
+   and it is doubled by a shape so it never relies on hue alone. */
+.status {
+  display: flex;
+  align-items: baseline;
+  gap: 6px;
+  margin: 0 0 var(--gap);
+  min-height: 18px;
+  font: var(--text-body);
+}
+
+.status:empty {
+  margin: 0;
+  min-height: 0;
+}
+
+.status:empty::before {
+  display: none;
+}
+
+.status::before {
+  content: "";
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  transform: translateY(-1px);
+}
+
+.status.ok,
+.tag.ok {
+  color: var(--ok);
+}
+
+.status.warn,
+.tag.warn {
+  color: var(--warn);
+}
+
+.status.err,
+.tag.err {
+  color: var(--err);
+}
+
+.status.muted,
+.tag.muted {
+  color: var(--label-2);
+}
+
+/* Shape, not just colour: a ring for pending, a square for a problem. */
+.status.muted::before {
+  background: transparent;
+  box-shadow: inset 0 0 0 1.5px currentColor;
+}
+
+.status.err::before,
+.status.warn::before {
+  border-radius: 2px;
+}
+
+.tag {
+  font: var(--text-subhead);
+}
+
+span.block,
+.tag.block {
+  display: block;
+}
+
+/* --- computed output ------------------------------------------------------
+ * Everything the tool worked out appears in a sunken well. Typed input sits on
+ * the surface; derived values sit below it. That one rule is what makes the
+ * popup scannable: you always know which text you wrote and which it did. */
+
+.out,
+.sig {
+  margin: 0;
+  padding: 8px 9px;
+  background: var(--sunken);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius);
+  overflow-wrap: anywhere;
+}
+
+.out {
+  max-height: 200px;
+  overflow: auto;
+  white-space: pre-wrap;
+}
+
+.out:empty::before {
+  content: "\2014";
+  color: var(--label-3);
+}
+
+/* Metadata chips: facts about the input, so they stay neutral. */
+.badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-bottom: var(--gap);
+}
+
+.badges:empty {
+  margin: 0;
+}
+
+.badge {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.4;
+  padding: 2px 7px;
+  border-radius: 5px;
+  background: var(--sunken);
+  color: var(--label-2);
+  border: 1px solid var(--separator);
+  white-space: nowrap;
+}
+
+/* --- tables and key/value lists ------------------------------------------- */
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-bottom: 12px;
+}
+
+.table th {
+  text-align: left;
+  font: var(--text-subhead-em);
+  color: var(--label-2);
+  padding: 0 8px 5px 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.table td {
+  padding: 7px 8px 7px 0;
+  vertical-align: top;
+  border-bottom: 1px solid var(--separator);
+}
+
+.table tr:last-child td {
+  border-bottom: 0;
+}
+
+.nowrap {
+  white-space: nowrap;
+}
+
+.kv-row {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.kv-row:last-child {
+  border-bottom: 0;
+}
+
+.kv-key {
+  flex: 0 0 124px;
+  font: var(--text-subhead-em);
+  color: var(--label-2);
+}
+
+.kv-value {
+  flex: 1;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* --- JSON diff ------------------------------------------------------------ */
+
+.diff-row {
+  display: flex;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 5px;
+  margin-bottom: 4px;
+}
+
+/* The sign carries the meaning; the tint only reinforces it. */
+.diff-row.added {
+  background: var(--add-bg);
+}
+
+.diff-row.removed {
+  background: var(--del-bg);
+}
+
+.diff-row.changed {
+  background: var(--chg-bg);
+}
+
+.diff-sign {
+  flex: 0 0 10px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+}
+
+.diff-body {
+  min-width: 0;
+  flex: 1;
+}
+
+.diff-path {
+  display: block;
+  color: var(--label-2);
+  font: var(--text-subhead);
+  overflow-wrap: anywhere;
+}
+
+.diff-values {
+  overflow-wrap: anywhere;
+}
+
+.diff-values del,
+.diff-values ins {
+  text-decoration: none;
+}
+
+.diff-values del {
+  color: var(--err);
+}
+
+.diff-values ins {
+  color: var(--ok);
+}
+
+/* --- regex ---------------------------------------------------------------- */
+
+.highlight {
+  min-height: 46px;
+}
+
+mark {
+  background: var(--mark-bg);
+  color: var(--mark-fg);
+  border-radius: 3px;
+  padding: 0 1px;
+}
+
+mark.empty {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  padding: 0;
+  vertical-align: text-bottom;
+  background: var(--accent);
+}
+
+.groups:not(:empty) {
+  margin-top: 12px;
+}
+
+.group-block {
+  border-top: 1px solid var(--separator);
+  padding-top: 8px;
+  margin-bottom: 8px;
+}
+
+.group-head {
+  margin: 0 0 5px;
+  font: var(--text-subhead-em);
+  color: var(--label-2);
+}
+
+.group-list {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 3px 10px;
+  margin: 0;
+}
+
+.group-list dt {
+  color: var(--label-2);
+  font: var(--text-subhead);
+  white-space: nowrap;
+}
+
+.group-list dd {
+  margin: 0;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* --- motion ---------------------------------------------------------------
+ * Nothing here animates except control feedback, and that is optional
+ * (accessibility.md > Motion). */
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    transition: none !important;
+    animation: none !important;
+  }
+}
